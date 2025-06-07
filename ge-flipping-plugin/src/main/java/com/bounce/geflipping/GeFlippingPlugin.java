@@ -1,28 +1,27 @@
 package com.bounce.geflipping;
 
-import com.google.common.collect.Ordering;
+import com.bounce.geflipping.fetch.GePriceFetcher;
+import com.bounce.geflipping.model.ItemSuggestion;
+import com.bounce.geflipping.model.Margin;
+import com.bounce.geflipping.model.VolumeData;
+import com.bounce.geflipping.service.FlipCalculator;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.events.GameTick;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.util.ImageUtil;
 
 import javax.inject.Inject;
-import javax.swing.*;
 import java.io.IOException;
-import java.net.URL;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Slf4j
 @PluginDescriptor(name = "GE Flipping Helper")
@@ -34,25 +33,33 @@ public class GeFlippingPlugin extends Plugin
     @Inject
     private ClientToolbar clientToolbar;
 
+    @Inject
+    private ItemManager itemManager;
+
     private NavigationButton navButton;
     private GeFlippingPanel panel;
+    private FlipCalculator calculator;
+    private GePriceFetcher fetcher;
 
-    private static final String PRICE_URL = "https://prices.runescape.wiki/api/v1/osrs/latest";
+    static final String PRICE_URL = "https://prices.runescape.wiki/api/v1/osrs/latest";
+    static final String VOLUME_URL = "https://prices.runescape.wiki/api/v1/osrs/5m";
 
     @Override
-    protected void startUp() throws Exception
+    protected void startUp()
     {
         panel = new GeFlippingPanel();
+        calculator = new FlipCalculator(itemManager);
+        fetcher = new GePriceFetcher(PRICE_URL, VOLUME_URL);
         navButton = NavigationButton.builder()
                 .tooltip("GE Flipping Helper")
-                .icon(new ImageIcon(getClass().getResource("/geflipping_icon.png")))
+                .icon(ImageUtil.loadImageResource(getClass(), "/geflipping_icon.png"))
                 .panel(panel)
                 .build();
         clientToolbar.addNavigation(navButton);
     }
 
     @Override
-    protected void shutDown() throws Exception
+    protected void shutDown()
     {
         clientToolbar.removeNavigation(navButton);
     }
@@ -78,44 +85,14 @@ public class GeFlippingPlugin extends Plugin
 
         try
         {
-            Map<Integer, Margin> margins = GePriceFetcher.fetchMargins();
-            List<Map.Entry<Integer, Margin>> sorted = margins.entrySet().stream()
-                    .sorted(Comparator.comparingInt(e -> -e.getValue().profit()))
-                    .collect(Collectors.toList());
-            for (Map.Entry<Integer, Margin> entry : sorted)
-            {
-                if (entry.getValue().high <= coins)
-                {
-                    panel.setSuggestion(entry.getKey(), entry.getValue());
-                    break;
-                }
-            }
+            Map<Integer, Margin> margins = fetcher.fetchMargins();
+            Map<Integer, VolumeData> volumes = fetcher.fetchVolumes();
+            List<ItemSuggestion> suggestions = calculator.calculate(coins, margins, volumes);
+            panel.setSuggestions(suggestions);
         }
         catch (IOException ex)
         {
             log.debug("Failed to fetch prices", ex);
         }
-    }
-}
-
-class GePriceFetcher
-{
-    private static final ObjectMapper mapper = new ObjectMapper();
-    static Map<Integer, Margin> fetchMargins() throws IOException
-    {
-        JsonNode node = mapper.readTree(new URL(GeFlippingPlugin.PRICE_URL));
-        JsonNode data = node.get("data");
-        return mapper.convertValue(data, Map.class);
-    }
-}
-
-class Margin
-{
-    public int high;
-    public int low;
-
-    public int profit()
-    {
-        return high - low;
     }
 }

@@ -1,20 +1,42 @@
 package com.bounce.geflipping;
 
-import javax.swing.*;
-import java.awt.*;
+import com.bounce.geflipping.model.ItemSuggestion;
+import net.runelite.client.ui.PluginPanel;
 
-class GeFlippingPanel extends JPanel
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.util.List;
+
+class GeFlippingPanel extends PluginPanel
 {
     private final JLabel coinsLabel = new JLabel();
-    private final JLabel suggestionLabel = new JLabel();
+    private final DefaultTableModel tableModel;
 
     GeFlippingPanel()
     {
-        setLayout(new GridLayout(0, 1));
-        add(new JLabel("Coins:"));
-        add(coinsLabel);
-        add(new JLabel("Suggested Item:"));
-        add(suggestionLabel);
+        setLayout(new BorderLayout());
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        top.add(new JLabel("Coins:"));
+        top.add(coinsLabel);
+        add(top, BorderLayout.NORTH);
+
+        tableModel = new DefaultTableModel(new Object[]{"Item", "Qty", "Buy", "Sell", "Profit", "Total"}, 0)
+        {
+            @Override
+            public Class<?> getColumnClass(int column)
+            {
+                return column == 0 ? Icon.class : Object.class;
+            }
+
+            @Override
+            public boolean isCellEditable(int row, int column)
+            {
+                return false;
+            }
+        };
+        JTable table = new JTable(tableModel);
+        add(new JScrollPane(table), BorderLayout.CENTER);
     }
 
     void setCoins(int coins)
@@ -22,8 +44,19 @@ class GeFlippingPanel extends JPanel
         coinsLabel.setText(String.valueOf(coins));
     }
 
-    void setSuggestion(int itemId, Margin margin)
+    void setSuggestions(List<ItemSuggestion> suggestions)
     {
-        suggestionLabel.setText(itemId + " profit:" + margin.profit());
+        tableModel.setRowCount(0);
+        for (ItemSuggestion s : suggestions)
+        {
+            tableModel.addRow(new Object[]{
+                s.getIcon(),
+                s.getQuantity(),
+                s.getBuyPrice(),
+                s.getSellPrice(),
+                s.getProfit(),
+                s.getTotalProfit()
+            });
+        }
     }
 }
