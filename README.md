@@ -11,7 +11,7 @@ You can click the Preview link to take a look at your changes.
 
 ## GE Flipping Helper Plugin
 
-This repository now includes a RuneLite plugin located in `ge-flipping-plugin/`. The plugin displays your coin stack and suggests Grand Exchange items to flip using price data from the OSRS Wiki API.
+This repository now includes a RuneLite plugin located in `ge-flipping-plugin/`. The plugin displays your coin stack and suggests Grand Exchange items to flip using price data from the OSRS Wiki API. It now also factors in recent trade volumes to rank items by the highest potential total profit you can achieve with your available coins.
 
 ### Build Instructions
 
