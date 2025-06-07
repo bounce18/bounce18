@@ -1,38 +1,42 @@
 package com.bounce.geflipping;
 
+import com.bounce.geflipping.model.ItemSuggestion;
 import net.runelite.client.ui.PluginPanel;
+
 import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.util.List;
 
 class GeFlippingPanel extends PluginPanel
 {
     private final JLabel coinsLabel = new JLabel();
-    private final JLabel iconLabel = new JLabel();
-    private final JLabel nameLabel = new JLabel();
-    private final JLabel quantityLabel = new JLabel();
-    private final JLabel buyLabel = new JLabel();
-    private final JLabel sellLabel = new JLabel();
-    private final JLabel profitLabel = new JLabel();
-    private final JLabel totalProfitLabel = new JLabel();
+    private final DefaultTableModel tableModel;
 
     GeFlippingPanel()
     {
-        setLayout(new GridLayout(0, 1));
-        add(new JLabel("Coins:"));
-        add(coinsLabel);
-        add(new JLabel("Suggested Item:"));
-        add(iconLabel);
-        add(nameLabel);
-        add(new JLabel("Quantity you can buy:"));
-        add(quantityLabel);
-        add(new JLabel("Buy price:"));
-        add(buyLabel);
-        add(new JLabel("Sell price:"));
-        add(sellLabel);
-        add(new JLabel("Profit per item:"));
-        add(profitLabel);
-        add(new JLabel("Total profit:"));
-        add(totalProfitLabel);
+        setLayout(new BorderLayout());
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        top.add(new JLabel("Coins:"));
+        top.add(coinsLabel);
+        add(top, BorderLayout.NORTH);
+
+        tableModel = new DefaultTableModel(new Object[]{"Item", "Qty", "Buy", "Sell", "Profit", "Total"}, 0)
+        {
+            @Override
+            public Class<?> getColumnClass(int column)
+            {
+                return column == 0 ? Icon.class : Object.class;
+            }
+
+            @Override
+            public boolean isCellEditable(int row, int column)
+            {
+                return false;
+            }
+        };
+        JTable table = new JTable(tableModel);
+        add(new JScrollPane(table), BorderLayout.CENTER);
     }
 
     void setCoins(int coins)
@@ -40,14 +44,19 @@ class GeFlippingPanel extends PluginPanel
         coinsLabel.setText(String.valueOf(coins));
     }
 
-    void setSuggestion(ImageIcon icon, String name, int quantity, Margin margin, int totalProfit)
+    void setSuggestions(List<ItemSuggestion> suggestions)
     {
-        iconLabel.setIcon(icon);
-        nameLabel.setText(name);
-        quantityLabel.setText(String.valueOf(quantity));
-        buyLabel.setText(String.valueOf(margin.low));
-        sellLabel.setText(String.valueOf(margin.high));
-        profitLabel.setText(String.valueOf(margin.profit()));
-        totalProfitLabel.setText(String.valueOf(totalProfit));
+        tableModel.setRowCount(0);
+        for (ItemSuggestion s : suggestions)
+        {
+            tableModel.addRow(new Object[]{
+                s.getIcon(),
+                s.getQuantity(),
+                s.getBuyPrice(),
+                s.getSellPrice(),
+                s.getProfit(),
+                s.getTotalProfit()
+            });
+        }
     }
 }
