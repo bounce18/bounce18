@@ -1,6 +1,5 @@
 package com.bounce.geflipping;
 
-import com.google.common.collect.Ordering;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.Item;
@@ -13,7 +12,9 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 
 import javax.inject.Inject;
-import javax.swing.*;
+import net.runelite.client.game.ItemManager;
+import net.runelite.client.util.ImageUtil;
+import javax.swing.ImageIcon;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Comparator;
@@ -34,10 +35,14 @@ public class GeFlippingPlugin extends Plugin
     @Inject
     private ClientToolbar clientToolbar;
 
+    @Inject
+    private ItemManager itemManager;
+
     private NavigationButton navButton;
     private GeFlippingPanel panel;
 
-    private static final String PRICE_URL = "https://prices.runescape.wiki/api/v1/osrs/latest";
+    static final String PRICE_URL = "https://prices.runescape.wiki/api/v1/osrs/latest";
+    static final String VOLUME_URL = "https://prices.runescape.wiki/api/v1/osrs/5m";
 
     @Override
     protected void startUp() throws Exception
@@ -45,7 +50,7 @@ public class GeFlippingPlugin extends Plugin
         panel = new GeFlippingPanel();
         navButton = NavigationButton.builder()
                 .tooltip("GE Flipping Helper")
-                .icon(new ImageIcon(getClass().getResource("/geflipping_icon.png")))
+                .icon(ImageUtil.loadImageResource(getClass(), "/geflipping_icon.png"))
                 .panel(panel)
                 .build();
         clientToolbar.addNavigation(navButton);
@@ -78,17 +83,37 @@ public class GeFlippingPlugin extends Plugin
 
         try
         {
+            final int availableCoins = coins;
             Map<Integer, Margin> margins = GePriceFetcher.fetchMargins();
+            Map<Integer, VolumeData> volumes = GePriceFetcher.fetchVolumes();
+
             List<Map.Entry<Integer, Margin>> sorted = margins.entrySet().stream()
-                    .sorted(Comparator.comparingInt(e -> -e.getValue().profit()))
+                    .filter(e -> e.getValue().low > 0 && e.getValue().low <= availableCoins)
+                    .sorted(Comparator.comparingInt(e -> {
+                        int id = e.getKey();
+                        Margin m = e.getValue();
+                        VolumeData v = volumes.get(id);
+                        int volLimit = v != null ? v.lowPriceVolume : Integer.MAX_VALUE;
+                        int qty = Math.min(availableCoins / m.low, volLimit);
+                        return -(qty * m.profit());
+                    }))
                     .collect(Collectors.toList());
+
             for (Map.Entry<Integer, Margin> entry : sorted)
             {
-                if (entry.getValue().high <= coins)
-                {
-                    panel.setSuggestion(entry.getKey(), entry.getValue());
-                    break;
-                }
+                int id = entry.getKey();
+                Margin margin = entry.getValue();
+                VolumeData volume = volumes.get(id);
+                int volLimit = volume != null ? volume.lowPriceVolume : Integer.MAX_VALUE;
+                int quantity = Math.min(availableCoins / margin.low, volLimit);
+                int totalProfit = quantity * margin.profit();
+                panel.setSuggestion(
+                    new ImageIcon(itemManager.getImage(id)),
+                    itemManager.getItemComposition(id).getName(),
+                    quantity,
+                    margin,
+                    totalProfit);
+                break;
             }
         }
         catch (IOException ex)
@@ -105,7 +130,16 @@ class GePriceFetcher
     {
         JsonNode node = mapper.readTree(new URL(GeFlippingPlugin.PRICE_URL));
         JsonNode data = node.get("data");
-        return mapper.convertValue(data, Map.class);
+        return mapper.convertValue(data,
+            new com.fasterxml.jackson.core.type.TypeReference<Map<Integer, Margin>>() {});
+    }
+
+    static Map<Integer, VolumeData> fetchVolumes() throws IOException
+    {
+        JsonNode node = mapper.readTree(new URL(GeFlippingPlugin.VOLUME_URL));
+        JsonNode data = node.get("data");
+        return mapper.convertValue(data,
+            new com.fasterxml.jackson.core.type.TypeReference<Map<Integer, VolumeData>>() {});
     }
 }
 
@@ -118,4 +152,12 @@ class Margin
     {
         return high - low;
     }
+}
+
+class VolumeData
+{
+    public int avgHighPrice;
+    public int highPriceVolume;
+    public int avgLowPrice;
+    public int lowPriceVolume;
 }
